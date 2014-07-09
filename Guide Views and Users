@@ -1,0 +1,63 @@
+ /*
+DROP TABLE sandbox.tempTable;
+CREATE TABLE sandbox.tempTable AS (SELECT distinct permalink
+FROM user_groupondw.dim_user
+WHERE zip = '60617') with data primary index(permalink);
+*/
+
+ 
+DROP TABLE sandbox.tempCollect;
+CREATE TABLE sandbox.tempCollect AS (
+SELECT
+order_id,
+order_created_date,
+booked_net_revenue_amount,
+deal_key,
+profit_amount,
+user_key
+FROM dw.v_fact_collections
+WHERE order_created_date > date - 2) with data primary index(order_id);
+ 
+DROP TABLE sandbox.tempFatClick;
+CREATE TABLE sandbox.tempFatClick AS (
+SELECT 
+ORDER_ID,
+USER_PERMALINK,
+USER_KEY,
+event_date,
+session_id,
+cookie_b,
+event_type_key
+FROM user_groupondw.fact_clickstream
+WHERE event_date > date - 2) with data primary index(order_id);
+
+ 
+select a.event_date,
+			a.session_id,
+			a.cookie_b,
+			b.page_key,
+			b.page_type_name,
+			b.page_name,
+			a.event_type_key,
+			u.encrypted_login_email,
+			u.birth_year,
+			u.city,
+			u.state,
+			u.zip,
+			u.country,
+			u.created_date,
+			u.enrolled_in_weekly_digest,
+			u.first_purchase_date,
+			u.gender,
+			u.last_purchase_date,
+			co.booked_net_revenue_amount
+
+	FROM sandbox.tempFatClick a 
+	INNER JOIN sandbox.edit_article_page_name b on a.source_page_key = b.page_key --Contains a list of all of the articles on Groupon.com
+	INNER JOIN user_groupondw.dim_user u on u.permalink = a.USER_PERMALINK
+	LEFT JOIN sandbox.tempCollect co on co.ORDER_ID = a.order_id
+	--WHERE event_date = date - 3
+	group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19; 
+	
+
+	
