@@ -1,1 +1,31 @@
-Place Holder
+/* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
+
+
+SELECT
+o.opportunity_id
+,o.event_date
+FROM user_groupondw.dim_opportunity o
+INNER JOIN user_groupondw.agg_deal ad on ad.opportunity_key = o.opportunity_key
+
+WHERE
+o.opportunity_id IN (
+'006C000000pGR2GIAW'
+,'006C000000ny1QAIAY'
+,'006C000000pGzQQIA0'
+,'006C000000pHViaIAG'
+,'006C000000oOM6DIAW'
+,'006C000000pHeYaIAK'
+,'006C000000nwsXxIAI'
+,'006C000000pGJM7IAO'
+,'006C000000pHnIdIAK'
+,'006C000000oOgiDIAS'
+,'006C000000pH7yQIAS'
+,'006C000000pHrjMIAS'
+,'006C000000pHNyZIAW'
+,'006C000000oPe4fIAC'
+,'006C000000oPngdIAC'
+,'006C000000oOx4CIAS'
+,'006C000000oRJ0RIAW'
+,'006C000000oOJY1IAO'
+,'006C000000ny2sNIAQ'
+,'006C000000ny2usIAA')
