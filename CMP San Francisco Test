@@ -1,6 +1,42 @@
 /* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
 
 
+
+
+
+/*How many people "viewed" the San Francisco gallery page by day?*/
+
+SELECT
+EVENT_DATE
+,COUNT (distinct COOKIE_B) n_gallery_views
+
+FROM user_groupondw.fact_clickstream fc
+--Identify the 200ish different Page_KEYs that are associated with the San Francisco gallery page
+INNER JOIN (
+	SELECT distinct
+	PAGE_KEY
+	FROM user_groupondw.dim_page
+	WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
+	
+WHERE fc.event_date between '2014-08-01' and '2014-08-05'
+AND EVENT_TYPE_KEY = 2
+--AND SESSION_ID = '06d96512-1a1c-11e4-8105-7a2c8ba74633'
+GROUP by 1
+
+/*
+
+WHERE
+	fc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
+	AND event_date between '2014-08-01' and '2014-08-03') A on A.session_id = fc.session_id
+
+*/
+
+
+
+
+
+
+
  
 SELECT top 20
 o.opportunity_id
