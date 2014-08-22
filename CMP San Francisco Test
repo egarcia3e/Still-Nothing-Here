@@ -4,32 +4,107 @@
 
 
 
+
 /*How many people "viewed" the San Francisco gallery page by day?*/
+SELECT distinct
+	EVENT_DATE
+	,COOKIE_B
+
+	FROM user_groupondw.fact_clickstream fc
+		INNER JOIN (
+			SELECT distinct
+			PAGE_KEY
+			FROM user_groupondw.dim_page
+			WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
+	WHERE fc.event_date between '2014-08-11' and '2014-08-13'
+	AND EVENT_TYPE_KEY = 2
+
+
+
+
 
 SELECT
-EVENT_DATE
-,COUNT (distinct COOKIE_B) n_gallery_views
+B.EVENT_DATE
+,B.COOKIE_B
+,B.DEAL_KEY
+,B.n_deal_views
+,B.n_deal_clicks
+,COALESCE(A.n_orders,0) n_orders
+,COALESCE(A.Gross_Revenue,0) Gross_Revenue
+,COALESCE(A.Net_Revenue,0) Net_Revenue
 
-FROM user_groupondw.fact_clickstream fc
---Identify the 200ish different Page_KEYs that are associated with the San Francisco gallery page
-INNER JOIN (
-	SELECT distinct
-	PAGE_KEY
-	FROM user_groupondw.dim_page
-	WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
-	
-WHERE fc.event_date between '2014-08-01' and '2014-08-05'
-AND EVENT_TYPE_KEY = 2
---AND SESSION_ID = '06d96512-1a1c-11e4-8105-7a2c8ba74633'
-GROUP by 1
 
-/*
+FROM (
 
-WHERE
+
+	/*What is the revenue associated with the deal (and count orders)*/	
+	SELECT	
+	ORDER_DATE
+	,SFo.deal_key
+	,COUNT (distinct SFo.order_id) n_orders
+	,CAST(SUM(Net_Revenue) as dec(12,2)) Net_Revenue
+	,CAST(SUM(Gross_Revenue) as dec(12,2)) Gross_Revenue
+	FROM 
+	sandbox.edit_SanFran_orders SFo
+	WHERE
+	SFo.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
+	AND ORDER_DATE between '2014-08-11' and '2014-08-21'
+	GROUP by 1,2) A
+
+FULL OUTER JOIN (
+
+
+	/*How many people clicked on one of the test deals?*/
+	SELECT	
+	fc.EVENT_DATE
+	,fc.COOKIE_B
+	,fc.deal_key
+	,COUNT (distinct fc.COOKIE_B) n_deal_clicks
+	FROM user_groupondw.fact_clickstream fc
+	WHERE
 	fc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
-	AND event_date between '2014-08-01' and '2014-08-03') A on A.session_id = fc.session_id
+	AND fc.event_date between '2014-08-11' and '2014-08-21'
+	AND fc.EVENT_TYPE_KEY = 1
+	GROUP by 1,2,3) B on B.EVENT_DATE = A.ORDER_DATE AND B.deal_key = A.deal_key
 
-*/
+	
+FULL OUTER JOIN (
+
+
+	/*How many people viewed on one of the test deals?*/
+	SELECT	
+	fc.EVENT_DATE
+	,fc.COOKIE_B
+	,fc.deal_key
+	,COUNT (distinct fc.COOKIE_B) n_deal_views
+	FROM user_groupondw.fact_clickstream fc
+	WHERE
+	fc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
+	AND fc.event_date between '2014-08-11' and '2014-08-21'
+	AND fc.EVENT_TYPE_KEY = 2
+	GROUP by 1,2,3) D on D.EVENT_DATE = B.EVENT_DATE AND D.deal_key = B.deal_key
+	
+	
+	/*Calculate revenue by deal by order_id*/
+/*
+drop table sandbox.edit_SanFran_orders
+
+CREATE set table sandbox.edit_SanFran_orders as (
+SELECT
+vfc.deal_key
+,CAST(vfc.order_created_date at time zone 'America Central' as date) ORDER_DATE
+,vfc.order_date_key
+,vfc.order_id
+,SUM(vfc.booked_net_revenue_amount) Net_Revenue
+,SUM(vfc.booking_amount) Gross_Revenue
+FROM dw.v_fact_collections vfc
+WHERE vfc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
+GROUP by 1,2,3,4
+)with data primary index(deal_key), index(order_id);
+*/ 
+
+
+
 
 
 
