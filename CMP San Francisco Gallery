@@ -125,8 +125,9 @@ LEFT JOIN (
 		GROUP by 1,2,3) F on F.deal_key = B.deal_key
 
 		
-GROUP by 1,2,3
+GROUP by 1,2,3,4
 ) with data primary index(deal_key), index(event_date);
+
 
 
 	
