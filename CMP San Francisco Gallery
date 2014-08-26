@@ -145,7 +145,7 @@ vfc.deal_key
 ,SUM(vfc.booked_net_revenue_amount) Net_Revenue
 ,SUM(vfc.booking_amount) Gross_Revenue
 FROM dw.v_fact_collections vfc
-WHERE vfc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
+WHERE vfc.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
 GROUP by 1,2,3,4
 )with data primary index(deal_key), index(order_id);
 */ 
@@ -160,32 +160,100 @@ GROUP by 1,2,3,4
 
 
  
-SELECT top 20
+
+--drop table sandbox.edit_SanFran_TestDeals;
+create multiset table sandbox.edit_SanFran_TestDeals as ( 
+
+
+SELECT
 o.opportunity_id
 ,ad.deal_key
+,ad.deal_permalink
+,CASE o.opportunity_id
+when	'006C000000hsK1O'	then	'2014-08-04'
+when	'006C000000kBvfo'	then	'2014-08-06'
+when	'006C000000lxA8X'	then	'2014-08-11'
+when	'006C000000lxUOy'	then	'2014-08-21'
+when	'006C000000lyPDi'	then	'2014-08-21'
+when	'006C000000lyvre'	then	'2014-08-11'
+when	'006C000000mmbnA'	then	'2014-08-06'
+when	'006C000000mmmix'	then	'2014-08-12'
+when	'006C000000nwsXx'	then	'2014-08-05'
+when	'006C000000ny0Se'	then	'2014-08-06'
+when	'006C000000ny1Pq'	then	'2014-08-06'
+when	'006C000000ny1QA'	then	'2014-08-06'
+when	'006C000000ny2rj'	then	'2014-08-12'
+when	'006C000000ny2sN'	then	'2014-08-12'
+when	'006C000000ny2us'	then	'2014-08-12'
+when	'006C000000oOgiD'	then	'2014-08-06'
+when	'006C000000oOJY1'	then	'2014-08-11'
+when	'006C000000oOM6D'	then	'2014-08-05'
+when	'006C000000oOx4C'	then	'2014-08-11'
+when	'006C000000oP8yM'	then	'2014-08-21'
+when	'006C000000oPBrt'	then	'2014-08-21'
+when	'006C000000oPe4f'	then	'2014-08-05'
+when	'006C000000oPngd'	then	'2014-08-05'
+when	'006C000000oRIS5'	then	'2014-08-04'
+when	'006C000000oRJ0R'	then	'2014-08-11'
+when	'006C000000pGJM7'	then	'2014-08-06'
+when	'006C000000pGR2G'	then	'2014-08-12'
+when	'006C000000pGzQQ'	then	'2014-08-04'
+when	'006C000000pH7yQ'	then	'2014-08-05'
+when	'006C000000pHeYa'	then	'2014-08-05'
+when	'006C000000pHnId'	then	'2014-08-06'
+when	'006C000000pHNyZ'	then	'2014-08-11'
+when	'006C000000pHrjM'	then	'2014-08-11'
+when	'006C000000pHVia'	then	'2014-08-04'
+when	'006C000000pIUpy'	then	'2014-08-11'
+when	'006C000000pJvNi'	then	'2014-08-11'
+when	'006C000000qIwsr'	then	'2014-08-21'
+when	'006C000000pIO1E'	then	'2014-08-12'
+ELSE NULL END as image_change_date
 
 FROM user_groupondw.dim_opportunity o
 INNER JOIN user_groupondw.agg_deal ad on ad.opportunity_key = o.opportunity_key
 
 WHERE
 o.opportunity_id IN (
-'006C000000pGR2G'
-,'006C000000ny1QA'
-,'006C000000pGzQQ'
-,'006C000000pHVia'
-,'006C000000oOM6D'
-,'006C000000pHeYa'
+'006C000000hsK1O'
+,'006C000000kBvfo'
+,'006C000000lxA8X'
+,'006C000000lxUOy'
+,'006C000000lyPDi'
+,'006C000000lyvre'
+,'006C000000mmbnA'
+,'006C000000mmmix'
 ,'006C000000nwsXx'
-,'006C000000pGJM7'
-,'006C000000pHnId'
+,'006C000000ny0Se'
+,'006C000000ny1Pq'
+,'006C000000ny1QA'
+,'006C000000ny2rj'
+,'006C000000ny2sN'
+,'006C000000ny2us'
 ,'006C000000oOgiD'
-,'006C000000pH7yQ'
-,'006C000000pHrjM'
-,'006C000000pHNyZ'
+,'006C000000oOJY1'
+,'006C000000oOM6D'
+,'006C000000oOx4C'
+,'006C000000oP8yM'
+,'006C000000oPBrt'
 ,'006C000000oPe4f'
 ,'006C000000oPngd'
-,'006C000000oOx4C'
+,'006C000000oRIS5'
 ,'006C000000oRJ0R'
-,'006C000000oOJY1'
-,'006C000000ny2sN'
-,'006C000000ny2us')
+,'006C000000pGJM7'
+,'006C000000pGR2G'
+,'006C000000pGzQQ'
+,'006C000000pH7yQ'
+,'006C000000pHeYa'
+,'006C000000pHnId'
+,'006C000000pHNyZ'
+,'006C000000pHrjM'
+,'006C000000pHVia'
+,'006C000000pIUpy'
+,'006C000000pJvNi'
+,'006C000000qIwsr'
+,'006C000000pIO1E'
+) 
+
+
+) with data primary index(opportunity_id), index(deal_key);
