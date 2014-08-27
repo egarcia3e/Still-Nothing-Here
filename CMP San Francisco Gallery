@@ -12,122 +12,54 @@ List of Control Deal Keys
 create multiset table sandbox.edit_SanFran_gallery as (
 --insert into sandbox.edit_SanFran_gallery 
 SELECT
-A.EVENT_DATE
-
-
-,CASE B.DEAL_KEY 
-when 3147873 then date 	'2014-08-05'
-when 3134028 then date 	'2014-08-06'
-when 3186249 then date 	'2014-08-04'
-when 3174164 then date 	'2014-08-06'
-when 3189561 then date 	'2014-08-11'
-when 3180999 then date 	'2014-08-05'
-when 3137965 then date 	'2014-08-12'
-when 3142061 then date 	'2014-08-11'
-when 3147874 then date 	'2014-08-11'
-when 3137013 then date 	'2014-08-12'
-when 3162903 then date 	'2014-08-05'
-when 3133840 then date 	'2014-08-05'
-when 3188813 then date 	'2014-08-05'
-when 3174899 then date 	'2014-08-12'
-when 3170227 then date 	'2014-08-11'
-when 3191304 then date 	'2014-08-11'
-when 3156368 then date 	'2014-08-06'
-when 3188804 then date 	'2014-08-06'
-when 3162734 then date 	'2014-08-05'
-ELSE null END image_change_date
-
+COALESCE(A.EVENT_DATE,B.EVENT_DATE) EVENT_DATE
 ,B.DEAL_KEY
-,F.permalink
+,B.deal_permalink
+,B.image_change_date
 ,COUNT (distinct A.COOKIE_B) n_gallery_views
 ,COALESCE(COUNT (distinct B.COOKIE_B),0) n_deal_views
-,COALESCE(COUNT (distinct D.COOKIE_B),0) n_deal_clicks
-,COALESCE(COUNT (distinct E.ORDER_ID),0) n_orders
-,COALESCE(SUM(E.Gross_Revenue),0) Gross_Revenue
-,COALESCE(SUM(E.Net_Revenue),0) Net_Revenue
+,COALESCE(COUNT (distinct B.ORDER_ID),0) n_orders
+,COALESCE(SUM(B.Net_Revenue),0) Net_Revenue
 
 FROM (
 
 /*How many people "viewed" the San Francisco gallery page?*/
+/*Start with people who are on the SF gallery*/
 SELECT
 	EVENT_DATE
+	,SOURCE_PAGE_KEY
+	,DEST_PAGE_KEY
 	,COOKIE_B
-	--,COUNT (distinct COOKIE_B) n_gallery_views
 	FROM user_groupondw.fact_clickstream fc
-		INNER JOIN (
-			SELECT distinct
-			PAGE_KEY
-			FROM user_groupondw.dim_page
-			WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
-	WHERE fc.event_date between '2014-07-01' and '2014-08-22'
-	AND EVENT_TYPE_KEY = 2
-	GROUP by 1,2) A
+		INNER JOIN (SELECT distinct PAGE_KEY FROM user_groupondw.dim_page WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
+	WHERE fc.event_date between '2014-07-01' and '2014-08-25'
+	GROUP by 1,2,3,4
+	) A
 
-
-LEFT JOIN (
-
-
-/*How many people viewed one of the test deals?*/
-SELECT	
-	fc.EVENT_DATE
-	,fc.COOKIE_B
-	,fc.deal_key
-	,fc.ORDER_ID
-	--,COUNT (distinct fc.COOKIE_B) n_deal_views
-	FROM user_groupondw.fact_clickstream fc
-	WHERE
-	fc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
-	AND fc.event_date between '2014-07-01' and '2014-08-22'
-	AND fc.EVENT_TYPE_KEY = 2
-	GROUP by 1,2,3,4) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B
-	
-LEFT JOIN (	
-	
+LEFT JOIN ( /*This will limit to those people who started in the gallery instead of through email*/
+/*How many people viewed one of the test deals from the gallery page?*/
 SELECT
 	fc.EVENT_DATE
-	,fc.COOKIE_B
+	,COOKIE_B
 	,fc.deal_key
-	,fc.ORDER_ID
-	--,COUNT (distinct fc.COOKIE_B) n_deal_clicks
-	FROM user_groupondw.fact_clickstream fc
-	WHERE
-	fc.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
-	AND fc.event_date between '2014-07-01' and '2014-08-22'
-	AND fc.EVENT_TYPE_KEY = 1
-	GROUP by 1,2,3,4) D on D.EVENT_DATE = B.EVENT_DATE AND D.deal_key = B.deal_key AND D.COOKIE_B = B.COOKIE_B
-	
-	
-LEFT JOIN (
-
-	/*What is the revenue associated with the deal (and count orders)*/	
-	SELECT	
-	ORDER_DATE
-	,SFo.deal_key
 	,SFo.ORDER_ID
-	--,COUNT (distinct SFo.order_id) n_orders
+	,deal_permalink
+    ,image_change_date
 	,CAST(SUM(Net_Revenue) as dec(12,2)) Net_Revenue
-	,CAST(SUM(Gross_Revenue) as dec(12,2)) Gross_Revenue
-	FROM sandbox.edit_SanFran_orders SFo
+	FROM user_groupondw.fact_clickstream fc
+	LEFT JOIN sandbox.edit_SanFran_orders SFo on SFo.ORDER_DATE = fc.EVENT_DATE AND SFo.DEAL_KEY = fc.DEAL_KEY AND SFo.ORDER_ID = fc.ORDER_ID
+	LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key
 	WHERE
-	SFo.deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
-	AND ORDER_DATE between '2014-07-01' and '2014-08-22'
-	GROUP by 1,2,3) E on E.ORDER_DATE = B.EVENT_DATE AND E.DEAL_KEY = B.DEAL_KEY AND E.ORDER_ID = B.ORDER_ID
+	fc.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
+	AND fc.event_date between '2014-07-01' and '2014-08-25'	
+	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B
 
-
-LEFT JOIN (
-		/*Obtain the permalink associated with the deal*/
-		SELECT
-			deal_key
-			,deal_permalink permalink
-			,division
-		FROM user_groupondw.agg_deal
-		WHERE deal_key in (3191304,3189561,3188813,3188804,3186361,3186249,3180999,3174899,3174164,3170227,3162903,3162734,3156368,3147874,3147873,3142061,3137965,3137013,3134028,3133840)
-		GROUP by 1,2,3) F on F.deal_key = B.deal_key
-
-		
+	/*Obtain the permalink associated with the deal*/
+--LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = B.deal_key		
 GROUP by 1,2,3,4
 ) with data primary index(deal_key), index(event_date);
 
+--select top 1600 * from sandbox.edit_SanFran_galleryI
 
 
 	
