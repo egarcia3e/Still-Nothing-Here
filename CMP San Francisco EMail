@@ -54,7 +54,7 @@ LEFT JOIN (SELECT
 					group by 1,2,3,4) Y on Y.deal_key = X.deal_key and Y.user_key = X.user_key and X.email_date_key = Y.order_date_key
 			group by 1,2) B on B.email_date_key = A.email_date_key and B.deal_key = A.deal_key
 
-LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = B.deal_key			
+LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = A.deal_key			
 			
 ) with data primary index(deal_key), index(email_date_key);
 
