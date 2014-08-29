@@ -1,11 +1,12 @@
-delete from sandbox.ss_experiments_bh_metrics2 where request_day_key = $arg0;
-insert into sandbox.ss_experiments_bh_metrics2
+-- delete from sandbox.edit_experiments_bh_metrics2 where request_day_key = $arg0;
+--create table sandbox.edit_experiments_bh_metrics2 as (
+insert into sandbox.edit_experiments_bh_metrics2
 select
  a.expmt,
 a.request_day_key,
     a.variant,
-    null,
-    null,
+    null supply_channel,
+    null demand_channel,
     COUNT(DISTINCT a.cookie_b) users,  /*Here are the number of users*/
     SUM(col_buyer) buyers,
     SUM(col_orders) orders,
@@ -24,28 +25,32 @@ a.request_day_key,
         exp1.user_browser_id as cookie_b,   /*This is cookie_b from the subset of "user_groupondw.bld_experiments"*/
         null as supply_channel,
         null as demand_channel,
-        MAX(
-        	CASE WHEN c.cookie_b IS NOT NULL THEN 1 ELSE 0        END) buyer,
-            MAX(        CASE            WHEN c.cookie_b IS NOT NULL AND c.collected = 1 THEN 1 ELSE 0        END) col_buyer,
+        MAX( CASE WHEN c.cookie_b IS NOT NULL THEN 1 ELSE 0 END) buyer,
+            MAX( CASE   WHEN c.cookie_b IS NOT NULL AND c.collected = 1 THEN 1 ELSE 0  END) col_buyer,
             COUNT(DISTINCT c.order_id) orders,
-            COUNT(DISTINCT
-        	CASE            WHEN c.collected = 1 THEN c.order_id        END) col_orders,
+            COUNT(DISTINCT  CASE WHEN c.collected = 1 THEN c.order_id END) col_orders,
             SUM(COALESCE(c.original_quantity,0)) orig_quantity,
             SUM(COALESCE(c.collected_quantity,0)) col_quantity,
             cast(SUM(COALESCE(c.gross_revenue,0)) as float) gross_revenue,
             cast(SUM(COALESCE(c.gross_bookings,0)) as float) gross_bookings
         FROM
-        	(select log_date_key,experiment,variant,user_browser_id,count(*) as n from sandbox.ss_bld_experiments where log_date_key = $arg0 group by 1,2,3,4) AS exp1
+        	(select log_date_key,experiment,variant,user_browser_id,count(*) as n from sandbox.ss_bld_experiments where log_date_key = 20140820 /*INCLUDE DATE KEY HERE*/ group by 1,2,3,4) AS exp1
         LEFT JOIN
-        	(select * from sandbox.ss_bcookie_orders_collections where order_date_key = $arg0) as c       ON exp1.user_browser_id = c.cookie_b AND exp1.log_date_key = c.order_date_key
-        and exp1.variant is not null
-        GROUP BY 1,        2,       3,       4,       5,      6)    a
-    GROUP BY 1,    2,    3,   4,   5;
+        	(select * from sandbox.ss_bcookie_orders_collections where order_date_key = 20140820 /*INCLUDE DATE KEY HERE*/) as c ON exp1.user_browser_id = c.cookie_b AND exp1.log_date_key = c.order_date_key /*Link Up order information to experiment data*/
+        AND exp1.variant is not null
+        GROUP BY 1,2,3,4,5,6)    a
+    GROUP BY 1,2,3
+ --) with data primary index(expmt,request_day_key,variant);
 
+ select top 20 * from sandbox.edit_experiments_bh_metrics2 where expmt = 'hideCarouselVideos'
+ 
     
-    /*This table just sumarizes the table above*/
-    drop table sandbox.ss_bh_metrics_temp2;
-create table sandbox.ss_bh_metrics_temp2 as
+ 
+ 
+ 
+ /*This table just sumarizes the table above*/
+-- drop table sandbox.edit_bh_metrics_temp2;
+create table sandbox.edit_bh_metrics_temp2 as
 (
 select
     expmt,
@@ -60,18 +65,21 @@ select
     sum(gross_bookings) as gross_bookings,
     sum(gross_bookings_sqr) as gross_bookings_sqr
 FROM
-    sandbox.ss_experiments_bh_metrics2
+    sandbox.edit_experiments_bh_metrics2
+ WHERE expmt = 'hideCarouselVideos'
 group by 1,2,3
 ) with data primary index(expmt,request_day_key);
 
 
+select top 10 * from sandbox.edit_bh_metrics_temp2
 
 
 
 
 
-drop table sandbox.ss_bh_daily_metrics2;
-create table sandbox.ss_bh_daily_metrics2 as
+
+--drop table sandbox.edit_bh_daily_metrics2;
+create table sandbox.edit_bh_daily_metrics2 as
 (
 select
     a.expmt,
@@ -94,25 +102,35 @@ select
     b.qty_sqr as qtysqr2,
     a.purchasers as purch1,
     b.purchasers purch2
-from
-    (select * from sandbox.ss_bh_metrics_temp2 ) as a
+FROM
+    (select * from sandbox.edit_bh_metrics_temp2 ) as a
     inner join
-    (select * from sandbox.ss_bh_metrics_temp2 ) as b
+    (select * from sandbox.edit_bh_metrics_temp2 ) as b
     on
-        a.request_day_key = b.request_day_key and
-        a.expmt = b.expmt and
-        a.variant < b.variant
+        a.request_day_key = b.request_day_key
+        and a.expmt = b.expmt
+        and a.variant < b.variant
 ) with data primary index(expmt,request_day_key);
 
+select top 10* from sandbox.edit_bh_daily_metrics2
 
-grant all on sandbox.ss_experiments_bh_metrics2 to public;
-grant all on sandbox.ss_bh_metrics_temp2 to public;
-grant all on sandbox.ss_bh_daily_metrics2 to public;
 
-delete from sandbox.ss_expt_bcookie where log_Date_key = $arg0;
-delete from sandbox.ss_expt_metrics_test2 where log_date_key = $arg0;
-drop table sandbox.ss_expt_browser;
-create multiset table sandbox.ss_expt_browser as
+
+
+
+grant all on sandbox.edit_experiments_bh_metrics2 to public;
+grant all on sandbox.edit_bh_metrics_temp2 to public;
+grant all on sandbox.edit_bh_daily_metrics2 to public;
+
+delete from sandbox.edit_expt_bcookie where log_Date_key = /*INCLUDE DATE KEY HERE*/;
+delete from sandbox.edit_expt_metrics_test2 where log_date_key = $arg0;
+drop table sandbox.edit_expt_browser;
+
+
+
+
+
+create multiset table sandbox.edit_expt_browser as
 (
     select
     fc.event_day_key,
@@ -130,14 +148,21 @@ create multiset table sandbox.ss_expt_browser as
     group by 1,2
 ) with data primary index(cookie_b,event_day_key);
 
-collect statistics on sandbox.ss_expt_browser column(event_day_key,cookie_b);
 
-insert into sandbox.ss_expt_bcookie (log_date_key,user_browser_id)
+
+
+
+
+
+
+collect statistics on sandbox.edit_expt_browser column(event_day_key,cookie_b);
+
+insert into sandbox.edit_expt_bcookie (log_date_key,user_browser_id)
 select distinct log_date_key,user_browser_id from sandbox.ss_bld_experiments where log_date_key = $arg0;
 
-update sandbox.ss_expt_bcookie
+update sandbox.edit_expt_bcookie
 from
-sandbox.ss_expt_browser as temp
+sandbox.edit_expt_browser as temp
 set
 user_key = 0,
 browser = temp.browser_name,
@@ -146,9 +171,48 @@ subscription_id = temp.user_scid
 where
 log_date_key = temp.event_day_key and user_browser_id = temp.cookie_b;
 
-update sandbox.ss_expt_bcookie
+update sandbox.edit_expt_bcookie
 set
 browser='NA',
 browser_version='NA'
 where
 browser is null and browser_version is null;
+
+
+
+drop table sandbox.edit_user_orders;
+create multiset table sandbox.edit_user_orders as
+(
+    select
+    order_date_key,
+    cookie_b,
+    max(case when collected = 1 then 1 else 0 end) as purch,
+    max(case when collected = 1 and demand_channel = 'G1' then 1 else 0 end) as g1_purch,
+    max(case when collected = 1 and demand_channel = 'Goods' then 1 else 0 end) as goods_purch,
+    max(case when collected = 1 and demand_channel = 'Getaways' then 1 else 0 end) as gw_purch,
+    max(case when collected = 1 and demand_channel = 'Occasions' then 1 else 0 end) as occ_purch,
+    count(distinct case when collected = 1 then order_id else null end) as orders,
+    count(distinct case when collected = 1 and demand_channel='G1' then order_id else null end) as g1_orders,
+    count(distinct case when collected = 1 and demand_channel='Goods' then order_id else null end) as goods_orders,
+    count(distinct case when collected = 1 and demand_channel='Getaways' then order_id else null end) as gw_orders,
+    count(distinct case when collected = 1 and demand_channel='Occasions' then order_id else null end) as occ_orders,
+    sum(coalesce(collected_quantity,0)) qty,
+    sum(case when demand_channel = 'G1' then coalesce(collected_quantity,0) else 0 end) as g1_qty,
+    sum(case when demand_channel = 'Goods' then coalesce(collected_quantity,0) else 0 end) as goods_qty,
+    sum(case when demand_channel = 'Getaways' then coalesce(collected_quantity,0) else 0 end) as gw_qty,
+    sum(case when demand_channel = 'Occasions' then coalesce(collected_quantity,0) else 0 end) as occ_qty,
+    sum(coalesce(gross_revenue,0)) rev,
+    sum(case when demand_channel = 'G1' then coalesce(gross_revenue,0) else 0 end) as g1_rev,
+    sum(case when demand_channel = 'Goods' then coalesce(gross_revenue,0) else 0 end) as goods_rev,
+    sum(case when demand_channel = 'Getaways' then coalesce(gross_revenue,0) else 0 end) as gw_rev,
+    sum(case when demand_channel = 'Occasions' then coalesce(gross_revenue,0) else 0 end) as occ_rev,
+    sum(coalesce(gross_bookings,0)) bkg,
+    sum(case when demand_channel = 'G1' then coalesce(gross_bookings,0) else 0 end) as g1_bkg,
+    sum(case when demand_channel = 'Goods' then coalesce(gross_bookings,0) else 0 end) as goods_bkg,
+    sum(case when demand_channel = 'Getaways' then coalesce(gross_bookings,0) else 0 end) as gw_bkg,
+    sum(case when demand_channel = 'Occasions' then coalesce(gross_bookings,0) else 0 end) as occ_bkg
+    from
+    sandbox.ss_bcookie_orders_collections
+    where order_date_key = 20140820
+    group by 1,2
+) with data no primary index;
