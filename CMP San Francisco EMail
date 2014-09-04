@@ -11,6 +11,7 @@ SELECT
 	,deal_permalink
 	,image_change_date
 	,n_imps
+	,gross_bookings
 	,COALESCE(n_opens,0) n_opens
 	,COALESCE(n_clicks,0) n_clicks
 	,COALESCE(n_orders,0) n_orders
@@ -22,13 +23,14 @@ FROM (SELECT date_key email_date_key
 				,dd.day_rw email_date
 				,deal_key
 				,sum(total_impressions) n_imps
+				,sum(booking_amount_1) gross_bookings
 				,sum(same_day_opens_cnt) n_opens
 				,sum(same_day_clicks_cnt) n_clicks
 			FROM user_groupondw.deal_impression_purchase dip
 			INNER JOIN user_groupondw.dim_day dd on dd.day_key = dip.date_key
 			WHERE dip.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
 				AND dip.deal_position <= 9
-				AND dd.day_rw between '2014-07-01' and '2014-08-25'
+				AND dd.day_rw between '2014-07-01' and '2014-09-03'
 			GROUP by 1,2,3) A
 /*Count the number of orders and revenue associated with deals that came through an email click*/	
 LEFT JOIN (SELECT
@@ -41,7 +43,7 @@ LEFT JOIN (SELECT
 						user_key
 					from user_groupondw.fact_email_clicks /*Limit to those people who came to the site through email*/
 					where deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
-						and email_date_key between 20140701 and 20140825) X
+						and email_date_key between 20140701 and 20140903) X
 			INNER JOIN (select
 						order_id,
 						deal_key,
@@ -50,7 +52,7 @@ LEFT JOIN (SELECT
 						sum(booked_net_revenue_amount) net_revenue
 					FROM dw.v_fact_collections
 					where deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
-						and order_date_key between 20140701 and 20140825
+						and order_date_key between 20140701 and 20140903
 					group by 1,2,3,4) Y on Y.deal_key = X.deal_key and Y.user_key = X.user_key and X.email_date_key = Y.order_date_key
 			group by 1,2) B on B.email_date_key = A.email_date_key and B.deal_key = A.deal_key
 
