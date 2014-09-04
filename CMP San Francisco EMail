@@ -1,6 +1,6 @@
 /*San Francisco CMP EMail Teradata*/
 
---drop table sandbox.edit_SanFran_email;
+--drop table sandbox.edit_SanFran_email
 create multiset table sandbox.edit_SanFran_email as (
 --insert into sandbox.edit_SanFran_email 
 
@@ -11,10 +11,10 @@ SELECT
 	,deal_permalink
 	,image_change_date
 	,n_imps
-	,gross_bookings
 	,COALESCE(n_opens,0) n_opens
 	,COALESCE(n_clicks,0) n_clicks
 	,COALESCE(n_orders,0) n_orders
+	,COALESCE(CAST(gross_bookings as dec(12,2)),0) Gross_Bookings
 	,COALESCE(CAST(Net_Revenue as dec(12,2)),0) Net_Revenue
 
 /*Obtain the number of email impressions, opens, and clicks for each day*/	
@@ -23,7 +23,6 @@ FROM (SELECT date_key email_date_key
 				,dd.day_rw email_date
 				,deal_key
 				,sum(total_impressions) n_imps
-				,sum(booking_amount_1) gross_bookings
 				,sum(same_day_opens_cnt) n_opens
 				,sum(same_day_clicks_cnt) n_clicks
 			FROM user_groupondw.deal_impression_purchase dip
@@ -37,6 +36,7 @@ LEFT JOIN (SELECT
 				email_date_key,
 				X.deal_key,
 				count(order_id) n_orders,
+				sum(gross_bookings) gross_bookings,
 				sum(net_revenue) net_revenue
 			FROM (select click_date_key email_date_key,
 						deal_key,
@@ -49,6 +49,7 @@ LEFT JOIN (SELECT
 						deal_key,
 						user_key,
 						order_date_key,
+						sum(booking_amount) gross_bookings,
 						sum(booked_net_revenue_amount) net_revenue
 					FROM dw.v_fact_collections
 					where deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
@@ -71,10 +72,17 @@ LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = A.deal_key
 
 
 
-/*San Francisco CMP EMail Teradata CONTROL deals*/
+
+
+
+
+
+
+
+ /*San Francisco CMP EMail Teradata CONTROL deals*/
 /* List of control deals 3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750 */
 
---drop table sandbox.edit_SanFran_email_control;
+--drop table sandbox.edit_SanFran_email_control
 create multiset table sandbox.edit_SanFran_email_control as (
 --insert into sandbox.edit_SanFran_email 
 
@@ -85,10 +93,10 @@ SELECT
 	,deal_permalink
 	,image_change_date
 	,n_imps
-	,gross_bookings
 	,COALESCE(n_opens,0) n_opens
 	,COALESCE(n_clicks,0) n_clicks
 	,COALESCE(n_orders,0) n_orders
+	,COALESCE(CAST(gross_bookings as dec(12,2)),0) Gross_Bookings
 	,COALESCE(CAST(Net_Revenue as dec(12,2)),0) Net_Revenue
 
 /*Obtain the number of email impressions, opens, and clicks for each day*/	
@@ -97,7 +105,6 @@ FROM (SELECT date_key email_date_key
 				,dd.day_rw email_date
 				,deal_key
 				,sum(total_impressions) n_imps
-				,sum(booking_amount_1) gross_bookings
 				,sum(same_day_opens_cnt) n_opens
 				,sum(same_day_clicks_cnt) n_clicks
 			FROM user_groupondw.deal_impression_purchase dip
@@ -111,6 +118,7 @@ LEFT JOIN (SELECT
 				email_date_key,
 				X.deal_key,
 				count(order_id) n_orders,
+				sum(gross_bookings) gross_bookings,
 				sum(net_revenue) net_revenue
 			FROM (select click_date_key email_date_key,
 						deal_key,
@@ -123,6 +131,7 @@ LEFT JOIN (SELECT
 						deal_key,
 						user_key,
 						order_date_key,
+						sum(booking_amount) gross_bookings,
 						sum(booked_net_revenue_amount) net_revenue
 					FROM dw.v_fact_collections
 					where deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
@@ -134,4 +143,5 @@ LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = A.deal_key
 			
 ) with data primary index(deal_key), index(email_date_key);
 
---select top 1000 * from sandbox.edit_SanFran_email_control
+--select top 150 * from sandbox.edit_SanFran_email_control
+
