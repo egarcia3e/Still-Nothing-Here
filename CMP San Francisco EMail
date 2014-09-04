@@ -61,3 +61,77 @@ LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = A.deal_key
 ) with data primary index(deal_key), index(email_date_key);
 
 --select top 1000 * from sandbox.edit_SanFran_email
+
+
+
+
+
+
+
+
+
+
+/*San Francisco CMP EMail Teradata CONTROL deals*/
+/* List of control deals 3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750 */
+
+--drop table sandbox.edit_SanFran_email_control;
+create multiset table sandbox.edit_SanFran_email_control as (
+--insert into sandbox.edit_SanFran_email 
+
+SELECT
+	A.email_date
+	,A.email_date_key
+	,A.deal_key	
+	,deal_permalink
+	,image_change_date
+	,n_imps
+	,gross_bookings
+	,COALESCE(n_opens,0) n_opens
+	,COALESCE(n_clicks,0) n_clicks
+	,COALESCE(n_orders,0) n_orders
+	,COALESCE(CAST(Net_Revenue as dec(12,2)),0) Net_Revenue
+
+/*Obtain the number of email impressions, opens, and clicks for each day*/	
+	
+FROM (SELECT date_key email_date_key
+				,dd.day_rw email_date
+				,deal_key
+				,sum(total_impressions) n_imps
+				,sum(booking_amount_1) gross_bookings
+				,sum(same_day_opens_cnt) n_opens
+				,sum(same_day_clicks_cnt) n_clicks
+			FROM user_groupondw.deal_impression_purchase dip
+			INNER JOIN user_groupondw.dim_day dd on dd.day_key = dip.date_key
+			WHERE dip.deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
+				AND dip.deal_position <= 9
+				AND dd.day_rw between '2014-07-01' and '2014-09-03'
+			GROUP by 1,2,3) A
+/*Count the number of orders and revenue associated with deals that came through an email click*/	
+LEFT JOIN (SELECT
+				email_date_key,
+				X.deal_key,
+				count(order_id) n_orders,
+				sum(net_revenue) net_revenue
+			FROM (select click_date_key email_date_key,
+						deal_key,
+						user_key
+					from user_groupondw.fact_email_clicks /*Limit to those people who came to the site through email*/
+					where deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
+						and email_date_key between 20140701 and 20140903) X
+			INNER JOIN (select
+						order_id,
+						deal_key,
+						user_key,
+						order_date_key,
+						sum(booked_net_revenue_amount) net_revenue
+					FROM dw.v_fact_collections
+					where deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
+						and order_date_key between 20140701 and 20140903
+					group by 1,2,3,4) Y on Y.deal_key = X.deal_key and Y.user_key = X.user_key and X.email_date_key = Y.order_date_key
+			group by 1,2) B on B.email_date_key = A.email_date_key and B.deal_key = A.deal_key
+
+LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = A.deal_key			
+			
+) with data primary index(deal_key), index(email_date_key);
+
+--select top 1000 * from sandbox.edit_SanFran_email_control
