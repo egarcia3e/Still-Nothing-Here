@@ -58,6 +58,83 @@ GROUP by 1,2,3,4
 --select top 1600 * from sandbox.edit_SanFran_gallery
 
 
+
+
+
+
+
+
+ /* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
+
+--drop table sandbox.edit_SanFran_gallery_control;
+create multiset table sandbox.edit_SanFran_gallery_control as (
+--insert into sandbox.edit_SanFran_gallery 
+SELECT
+COALESCE(A.EVENT_DATE,B.EVENT_DATE) EVENT_DATE
+,B.DEAL_KEY
+,B.deal_permalink
+,B.image_change_date
+,COUNT (distinct A.COOKIE_B) n_gallery_views
+,COALESCE(COUNT (distinct B.COOKIE_B),0) n_deal_views
+,COALESCE(COUNT (distinct B.ORDER_ID),0) n_orders
+,COALESCE(SUM(B.Net_Revenue),0) Net_Revenue
+
+FROM (
+
+/*How many people "viewed" the San Francisco gallery page?*/
+/*Start with people who are on the SF gallery*/
+SELECT
+	EVENT_DATE
+	,SOURCE_PAGE_KEY
+	,DEST_PAGE_KEY
+	,COOKIE_B
+	FROM user_groupondw.fact_clickstream fc
+		INNER JOIN (SELECT distinct PAGE_KEY FROM user_groupondw.dim_page WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
+	WHERE fc.event_date between '2014-07-01' and '2014-09-03'
+	GROUP by 1,2,3,4
+	) A
+
+LEFT JOIN ( /*This will limit to those people who started in the gallery instead of through email*/
+/*How many people viewed one of the test deals from the gallery page?*/
+SELECT
+	fc.EVENT_DATE
+	,COOKIE_B
+	,fc.deal_key
+	,o.ORDER_ID
+	,NULL deal_permalink
+    ,NULL image_change_date
+	,CAST(SUM(booked_net_revenue_amount) as dec(12,2)) Net_Revenue
+	FROM user_groupondw.fact_clickstream fc
+	LEFT JOIN dw.v_fact_collections o on o.order_created_date = fc.EVENT_DATE AND o.deal_key = fc.DEAL_KEY AND o.ORDER_ID = fc.ORDER_ID
+	--LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key /*Obtain the permalink associated with the deals*/
+	WHERE
+	fc.deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
+	AND fc.event_date between '2014-07-01' and '2014-09-03'	
+	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B		
+GROUP by 1,2,3,4
+) with data primary index(deal_key), index(event_date);
+
+--select top 1600 * from sandbox.edit_SanFran_gallery_control
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	
 	
 	/*Calculate revenue by deal by order_id*/
