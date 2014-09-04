@@ -7,7 +7,6 @@ List of Control Deal Keys
 
 
 
-
 --drop table sandbox.edit_SanFran_gallery;
 create multiset table sandbox.edit_SanFran_gallery as (
 --insert into sandbox.edit_SanFran_gallery 
@@ -32,7 +31,7 @@ SELECT
 	,COOKIE_B
 	FROM user_groupondw.fact_clickstream fc
 		INNER JOIN (SELECT distinct PAGE_KEY FROM user_groupondw.dim_page WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
-	WHERE fc.event_date between '2014-07-01' and '2014-08-25'
+	WHERE fc.event_date between '2014-07-01' and '2014-09-03'
 	GROUP by 1,2,3,4
 	) A
 
@@ -48,18 +47,15 @@ SELECT
 	,CAST(SUM(Net_Revenue) as dec(12,2)) Net_Revenue
 	FROM user_groupondw.fact_clickstream fc
 	LEFT JOIN sandbox.edit_SanFran_orders SFo on SFo.ORDER_DATE = fc.EVENT_DATE AND SFo.DEAL_KEY = fc.DEAL_KEY AND SFo.ORDER_ID = fc.ORDER_ID
-	LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key
+	LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key /*Obtain the permalink associated with the deals*/
 	WHERE
 	fc.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
-	AND fc.event_date between '2014-07-01' and '2014-08-25'	
-	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B
-
-	/*Obtain the permalink associated with the deal*/
---LEFT JOIN sandbox.edit_SanFran_TestDeals D on D.deal_key = B.deal_key		
+	AND fc.event_date between '2014-07-01' and '2014-09-03'	
+	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B		
 GROUP by 1,2,3,4
 ) with data primary index(deal_key), index(event_date);
 
---select top 1600 * from sandbox.edit_SanFran_galleryI
+--select top 1600 * from sandbox.edit_SanFran_gallery
 
 
 	
