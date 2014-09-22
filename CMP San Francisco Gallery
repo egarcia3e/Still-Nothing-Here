@@ -1,10 +1,11 @@
-/* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
+ /* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
 
 /*
 List of Control Deal Keys
 3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750
+List of new control deals.  These should all be Non-STPS Featured deals
+3146461	,3143321	,3132044	,3113261	,3106655	,3144648	,3150442	,3131552	,3135602	,3098054	,3167407	,3182285	,3135810	,3178575	,3181833	,3112883	,3113127	,3134541	,3090560	,3138100	,3088581	,3095049	,3096249
 */
-
 
 
 --drop table sandbox.edit_SanFran_gallery;
@@ -21,7 +22,6 @@ COALESCE(A.EVENT_DATE,B.EVENT_DATE) EVENT_DATE
 ,COALESCE(SUM(B.Net_Revenue),0) Net_Revenue
 
 FROM (
-
 /*How many people "viewed" the San Francisco gallery page?*/
 /*Start with people who are on the SF gallery*/
 SELECT
@@ -31,7 +31,7 @@ SELECT
 	,COOKIE_B
 	FROM user_groupondw.fact_clickstream fc
 		INNER JOIN (SELECT distinct PAGE_KEY FROM user_groupondw.dim_page WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
-	WHERE fc.event_date between '2014-07-01' and '2014-09-03'
+	WHERE fc.event_date between '2014-07-01' and '2014-09-21'
 	GROUP by 1,2,3,4
 	) A
 
@@ -50,7 +50,7 @@ SELECT
 	LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key /*Obtain the permalink associated with the deals*/
 	WHERE
 	fc.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDeals)
-	AND fc.event_date between '2014-07-01' and '2014-09-03'	
+	AND fc.event_date between '2014-07-01' and '2014-09-21'	
 	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B		
 GROUP by 1,2,3,4
 ) with data primary index(deal_key), index(event_date);
@@ -66,7 +66,7 @@ GROUP by 1,2,3,4
 
  /* sandbox.ss_expt_metrics_compare_test contains list of all experiments*/
 
---drop table sandbox.edit_SanFran_gallery_control;
+drop table sandbox.edit_SanFran_gallery_control;
 create multiset table sandbox.edit_SanFran_gallery_control as (
 --insert into sandbox.edit_SanFran_gallery 
 SELECT
@@ -90,7 +90,7 @@ SELECT
 	,COOKIE_B
 	FROM user_groupondw.fact_clickstream fc
 		INNER JOIN (SELECT distinct PAGE_KEY FROM user_groupondw.dim_page WHERE PAGE_NAME = '/browse/san-francisco') A on A.PAGE_KEY = fc.SOURCE_PAGE_KEY
-	WHERE fc.event_date between '2014-07-01' and '2014-09-03'
+	WHERE fc.event_date between '2014-07-01' and '2014-09-21'
 	GROUP by 1,2,3,4
 	) A
 
@@ -108,8 +108,8 @@ SELECT
 	LEFT JOIN dw.v_fact_collections o on o.order_created_date = fc.EVENT_DATE AND o.deal_key = fc.DEAL_KEY AND o.ORDER_ID = fc.ORDER_ID
 	--LEFT JOIN sandbox.edit_SanFran_TestDeals SFD on SFD.deal_key = fc.deal_key /*Obtain the permalink associated with the deals*/
 	WHERE
-	fc.deal_key in (3155341,3148414,3115771,3088581,3129747,3112883,3106084,3113127,3129667,3145947,3144648,3090560,3113261,3118407,3146529,3134541,3095049,3098054,3106655,3131552,3096249,3179750)
-	AND fc.event_date between '2014-07-01' and '2014-09-03'	
+	fc.deal_key in (3146461,3143321,3132044,3113261,3106655,3144648,3150442,3131552,3135602,3098054,3167407,3182285,3135810,3178575,3181833,3112883,3113127,3134541,3090560,3138100,3088581,3095049,3096249)
+	AND fc.event_date between '2014-07-01' and '2014-09-21'	
 	GROUP by 1,2,3,4,5,6) B on B.EVENT_DATE = A.EVENT_DATE AND B.COOKIE_B = A.COOKIE_B		
 GROUP by 1,2,3,4
 ) with data primary index(deal_key), index(event_date);
@@ -122,24 +122,11 @@ GROUP by 1,2,3,4
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
 	
 	
 	/*Calculate revenue by deal by order_id*/
 /*
-drop table sandbox.edit_SanFran_orders
+drop table sandbox.edit_SanFran_orders;
 
 CREATE set table sandbox.edit_SanFran_orders as (
 SELECT
@@ -154,15 +141,6 @@ WHERE vfc.deal_key in (SELECT distinct deal_key FROM sandbox.edit_SanFran_TestDe
 GROUP by 1,2,3,4
 )with data primary index(deal_key), index(order_id);
 */ 
-
-
-
-
-
-
-
-
-
 
  
 
