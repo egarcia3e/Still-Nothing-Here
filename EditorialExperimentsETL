@@ -1,0 +1,517 @@
+
+/*Create a subset of the collections table*/
+delete from sandbox.eg_bcookie_orders_collections where order_date_key > date - 9
+
+INSERT INTO sandbox.eg_bcookie_orders_collections 
+        SELECT o.order_date_key,
+        o.src_created_date order_time,
+        o.order_key,
+        o.order_id,
+        o.tracking_cookie cookie_b,
+        o.user_key,
+        o.merchant_key,
+        dd.deal_key,
+        dd.permalink deal_permalink,
+        div.division_key,
+        div.permalink div_permalink,
+        s_ch.deal_channel_desc supply_channel,
+        d_ch.deal_channel_desc demand_channel,
+        op.opportunity_key,
+        o.original_quantity,
+        o.quantity,
+        0 ,
+        0 ,
+        0 ,
+        0 ,
+        0 ,
+        0 ,
+        0 ,
+        0 ,
+        0
+FROM user_groupondw.fact_orders o
+INNER JOIN user_groupondw.dim_division div ON o.division_key = div.division_key
+INNER JOIN user_groupondw.dim_deal_option ddo ON o.deal_option_key = ddo.deal_option_key
+INNER JOIN user_groupondw.dim_deal dd ON ddo.deal_key = dd.deal_key
+INNER JOIN dw.v_dim_deal_supply_channel_map s_map ON dd.opportunity_key = s_map.opportunity_key
+INNER JOIN dw.v_dim_deal_channel s_ch ON s_map.deal_supply_channel_key = s_ch.deal_channel_key
+INNER JOIN dw.v_dim_deal_demand_channel_map d_map ON dd.opportunity_key = d_map.opportunity_key
+INNER JOIN dw.v_dim_deal_channel d_ch ON d_map.deal_demand_channel_key = d_ch.deal_channel_key
+INNER JOIN dw.v_dim_opportunity op ON dd.opportunity_key = op.opportunity_key
+WHERE o.order_date_key > date - 9
+AND  o.tracking_cookie IS NOT NULL;
+
+
+/*Create an agregate table for collections*/
+delete from sandbox.eg_order_collections where order_date_key > date - 9
+
+INSERT INTO sandbox.eg_order_collections (order_date_key,order_id, gross_bookings, gross_revenue, units,creditcard,bucks, incentive, refund_amount)
+SELECT order_date_key, order_id,
+   SUM(booking_amount) gross_bookings,
+   SUM(booked_net_revenue_amount) gross_revenue,
+   SUM(case when action = 'sale' then booking_quantity end) units,
+   MAX(  CASE  WHEN payment_type = 'creditcard' THEN 1 ELSE 0  END) creditcard,
+   MAX(  CASE  WHEN payment_type = 'credits' THEN 1 ELSE 0     END) bucks,
+   MAX(  CASE  WHEN payment_type = 'discount' THEN 1 ELSE 0    END) incentive,
+   SUM(refund_amount) refund_amount
+FROM dw.v_fact_collections
+WHERE order_date_key > date - 9
+GROUP BY 1,2
+
+/*Update table with with revenue values*/
+UPDATE sandbox.eg_bcookie_orders_collections
+FROM sandbox.eg_order_collections c
+SET collected = 1
+, gross_bookings = c.gross_bookings
+, gross_revenue = c.gross_revenue
+, collected_quantity = c.units
+, creditcard = c.creditcard
+, bucks = c.bucks
+, incentive = c.incentive
+, refunded =  CASE WHEN c.refund_amount < 0 THEN 1 ELSE 0   END
+, refund_amount = c.refund_amount
+WHERE sandbox.eg_bcookie_orders_collections.order_id = c.order_id
+
+
+/*Create a subset of the experiments table with hideCarouselVideos and DealPageEditorialVariants experiments*/
+delete from sandbox.eg_bld_experiments where log_date_key >= ( substr(date,1,4) || substr(date,6,2) || substr(date,9,2) ) - 9
+
+insert into sandbox.eg_bld_experiments (log_date_key, log_date, experiment, variant, user_browser_id,log_timestamp)
+
+select log_date_key, log_date, experiment, variant, user_browser_id,
+min(cast( cast(substr(log_time,0,position('T' in log_time)) as date) AS timestamp(0)) + (cast(substr(log_time,position('T' in log_time) + 1, 8) as time) - time '00:00:00' hour TO second)) as "log_timestamp"
+FROM user_groupondw.bld_experiments 
+WHERE log_date_key >= ( substr(date,1,4) || substr(date,6,2) || substr(date,9,2) ) - 9
+AND experiment in ('hideCarouselVideos', 'DealPageEditorialVariants') 
+GROUP by 1,2,3,4,5;
+
+
+/*Get subset of all pages viewed from fact clickstream*/
+delete from sandbox.eg_bld_fc where event_date >= date - 9
+
+insert into sandbox.eg_bld_fc ( event_date, event_time, cookie_b, deal_key )
+select event_date, event_time, cookie_b, deal_key
+FROM user_groupondw.fact_clickstream
+WHERE 
+event_type_key = 2 
+AND bot_ind = 0
+AND event_date >= date - 9
+group by 1,2,3,4;
+
+
+/*Get a list of the deal pages that users were on when they were placed into an experiment*/
+delete from sandbox.eg_hcv_first_page where event_date > date - 9
+
+insert into sandbox.eg_hcv_first_page  (event_date, event_time, variant, cookie_b, deal_key, log_timestamp,time_diff)
+select event_date, event_time, variant, cookie_b, deal_key, log_timestamp,  ((cast(log_timestamp as timestamp(6))  - event_time) minute(4) to second) as "time_diff" 
+FROM sandbox.eg_bld_experiments eu
+INNER JOIN sandbox.eg_bld_fc fc on eu.user_browser_id = fc.cookie_b and eu.log_date = fc.event_date
+where event_time >= log_timestamp
+AND event_date > date - 9
+qualify row_number() over (partition by event_date, cookie_b, log_timestamp order by event_time) = 1
+group by 1,2,3,4,5,6,7;	
+
+
+
+/*Get the relevant fileds from a deal such as channel, market, category, etc. If a list of deal permalinks is provided then use it...else estimate it via timestamps as per below*/
+drop table sandbox.eg_test_deals_viewed;
+
+create table sandbox.eg_test_deals_viewed as (
+select d.deal_key, d.deal_permalink, d.deal_supply_channel, division, txnmy_v3_cat_name as "category", p.pds_cat as "GoodsCategory", max(h.available_until) available_until
+FROM 
+user_groupondw.agg_deal d
+INNER JOIN user_groupondw.dim_deal_option_status_history h on h.deal_key = d.deal_key
+LEFT JOIN sandbox.asz_goods_pds p on p.pds = d.txnmy_pds_v3_name
+WHERE 
+available_until >= '2014-08-10 04:59:59.000000'
+AND (
+d.deal_key in (
+	select deal_key
+	from sandbox.eg_hcv_first_page
+	WHERE -time_diff <= INTERVAL '5' SECOND
+	GROUP by 1
+	HAVING count(deal_key) > 300
+	)
+OR	d.deal_permalink in (
+'spray-la-vie-3'
+,'carson-s-ribs-1-4'
+,'peeled-inc-3'
+,'the-beauty-cell-inc-10'
+,'onyx-lounge'
+,'crystal-spa-7'
+,'juan-in-a-million-2'
+,'aloha-wellness-center-austin-1'
+,'tsunami-sushi-mission-bay'
+,'perform-for-life'
+,'sweet-spot-bakery-10'
+,'aj-s-spa-millennium-7'
+,'dervish-grill'
+,'satori-laser-hair-removal'
+,'manhattan-laser-spa-1'
+,'bonita-medispa'
+,'modelo-cosmetic-and-laser-skin-clinic-1'
+,'teach-me-beauty-8'
+,'solaris-laser-skin-care-3'
+,'enlighten-laser-inc-calgary-1'
+,'the-gentle-touch-4'
+,'advanced-anti-aging-and-weight-loss-1-4'
+,'bella-sol-med-spa-5-inland-empire'
+,'john-hawks-pub-3'
+,'karl-ratzsch-s'
+,'ashley-s-que-1'
+,'fire-on-water-1'
+,'bella-mia-italian-restaurant-1'
+,'city-winery-restaurant'
+,'brazzaz-3'
+,'cinetopia-llc-child-account'
+,'the-circuit-bouldering-gym-6'
+,'stanford-s-restaurant-bar-lake-oswego-rui'
+,'the-modern-man-barber-shop-2'
+,'el-cubo-de-cuba'
+,'music-millennium-1'
+,'roma-1090'
+,'carrols-creek-restaurant'
+,'todays-vision'
+,'kelley-s-cafe'
+,'big-willie-s-action-sports'
+,'metta-rest-spa'
+,'el-granjero-mexican-grill'
+,'eculent'
+,'gooding-grille'
+,'santa-monica-downtown-walking-tours'
+,'belle-vie-wellness-medical-aesthetics'
+,'elijah-churchills-1'
+,'master-s-bar-restaurant'
+,'rangoon'
+,'ladies-workout-express-1-10'
+,'natick-gas'
+,'neighbors-restaurant'
+,'urban-style-beth-christensen'
+,'artzaholic'
+,'fridge-art-fair-inc'
+,'greek-4-u-restaurant'
+,'crossfit-afterburn'
+,'fusion-dental-care'
+,'vanity-salon-1'
+,'prestige-detailing'
+,'los-tacos-by-chef-omar'
+,'tyson-s-playground'
+,'crossfit-inland-empire'
+,'topwater-cafe'
+,'peony-pavilion'
+,'glittering-lights'
+,'mehar-indian-restaurant'
+,'spinco'
+,'sunrise-bistro-1'
+,'joyce-s-total-look-at-total-look-salon-and-spa'
+,'the-wooden-horse'
+,'pmac-expo-1'
+,'catalina-jazz-club-1'
+,'halulu-hibachi-and-sushi'
+,'snus-hill-winery-1'
+,'matsu-sushi-6'
+,'ritz-salon-day-spa'
+,'the-white-elephant'
+,'tokyo-japanese-steakhouse-5'
+,'park-pizza-cream'
+,'blue-heron-zipline-at-whitewater-express-columbus'
+,'cranky-franky'
+,'bagel-brunch'
+,'delaware-springs-golf-course'
+,'rainbow-swing-set-superstore'
+,'180-fitness-1-3'
+,'leash-your-fitness'
+,'oscar-s-new-american'
+,'colovista-golf-club'
+,'richmond-auto-wash-1'
+,'dom-s-broad-street-eatery'
+,'fanntastic-fishing'
+,'seven-dining-lounge'
+,'jasmine-thai-cuisine-in-winnetka'
+,'the-hollywood-scoop-1'
+,'pinky-nail-spa'
+,'heirloom-baking-co'
+,'meleesa-the-salon-1'
+,'brocato-s-sandwich-shop'
+,'the-filmore-entertainment-lounge-5'
+,'longwood-golf-club'
+,'lee-brothers-new'
+,'elliotts-public-house'
+,'green-lantern-lounge'
+,'galla-winehouse-and-bistro'
+,'ernst-lanes'
+,'casa-linda-restaurante'
+,'the-wellness-studio-1'
+,'minor-miracles-medi-spa'
+,'dynamic-martial-arts-and-fitness'
+,'the-screens'
+,'fred-s-italian-corner'
+,'i-trampoline-hawaii'
+,'american-luxury-limousine-1'
+,'sharkys-fish-chicken'
+,'mississippi-museum-of-art-1'
+,'1world-aero-llc'
+,'the-salon-at-glow'
+,'hey-cupcake'
+,'shawn-michael-salon'
+,'tajima-izakaya'
+,'radiant-smiles-dental-3'
+,'the-arthritis-foundation-jingle-bell-run-5k-1'
+,'brea-express-car-wash'
+,'midwest-college-prep'
+,'virginia-skydiving-center'
+,'bakers-of-milford-see-parent'
+,'heirloom-restaurant'
+,'canvas-corks-forks'
+,'marjs-village-kitchen'
+,'rudy-s-pub-and-grill'
+,'fusion-fitness-az'
+,'aerial-expressions'
+,'sir-goonys-family-fun-center-1'
+,'revive-skin-laser-studio-1'
+,'pho-ethan'
+,'cinema-6-inc'
+,'maxair-services-llc-12-boston'
+,'serenity-massage-5-14'
+,'premier-dentistry-2'
+,'yoga-spa-2'
+,'alamo-hand-car-wash'
+,'manoa-chocolate-hawaii'
+,'wild-wild-west-saloon'
+,'vistoso-medical-spa'
+,'safe-auto-glass-7'
+,'pizza-pints-pizzeria'
+,'lone-star-dental-center'
+,'masala-kitchen-express'
+,'autco-tire-and-service-center'
+,'big-rock-s-pizza'
+,'adventurers-mini-golf'
+,'sealed-by-santa-1'
+,'monica-s-massage-studio-1'
+,'full-moon-farm-1'
+,'ellie-s'
+,'mac-s-tree-shack'
+,'jane-s-health-market'
+,'monica-lanter-hairstylist-1'
+,'little-city-grill'
+,'mike-s-stone-baked-pizza'
+,'randall-s-island-golf-sports'
+,'safe-haven-adventure-sports'
+,'revitalize-life-fitness'
+,'guidepost-health-body-makeover'
+,'oishi-japanese-restaurant-5'
+,'hunt-club-farm'
+,'serene-dreams-spa-1-1'
+,'world-of-stereo'
+,'the-edge-fitness-clubs-1'
+,'new-orleans-comic-expo'
+,'the-longhorn-racing-academy'
+,'megasun-tanning'
+,'us-budokai-karate-headquaters'
+,'toscana-9'
+,'regina-boxing-and-fitness-inc'
+,'nails-spa-beyond'
+,'fusion-studio'
+,'nails-by-becca'
+,'fit-avenue'
+,'source-yoga-center-1'
+,'matisse'
+,'hand-to-heart-massage-1'
+,'mulligans-sports-grille-2'
+,'visible-changes-at-studio-mod'
+,'mercurio-s-artisan-gelato-and-neapolitan-pizza'
+,'angelo-s-ristorante'
+,'mansion-hill-tavern'
+,'i-lipo-sioux-falls'
+,'polartes-poll-fitness'
+,'the-links-at-gettysburg'
+,'excel-mobile-detailing'
+,'the-nail-shop-7'
+,'village-market-by-fat-chef'
+,'foxy-fitness-studio-pole'
+,'papa-joe-s-pizza-1'
+,'crossfit-forest-hills'
+,'hog-head-s-bar-grill'
+,'comos'
+,'taste-of-the-himalayas-4'
+,'luisa-s-pizza-pasta'
+,'nzone'
+,'drop-squad-kitchen'
+,'get-in-shape-for-women-1-11'
+,'le-jardin-du-roi'
+,'caesar-s-italian-restaurant'
+,'north-bend-family-dentistry-1'
+,'all-tune-and-lube-raleigh'
+,'studio-nine-with-erin-mcclough-1'
+,'ree-s-painting-parties'
+,'discovery-gateway-children-s-museum'
+,'l-a-city-tan'
+,'inspirational-yoga-and-fitness'
+,'rosewood-chiropractic'
+,'marvin-mozzeroni-s-gates'
+,'mcdilda-photography-4'
+,'so-fitness'
+,'my-cake-gallery'
+,'blue-moon-outdoor-center'
+,'commando-fitness'
+,'dave-johnson-golf-group-rooster-run'
+,'ten-ten-tapas-restaurant'
+,'glitz-entertainment'
+,'massage-time-1'
+,'2-sweet-international-delight'
+,'first-health-chiropratic-sanford'
+,'maryland-center-of-aesthetic-dentistry'
+,'remedies-salon-spa-barbershop'
+,'eyemax-eyecare-1'
+,'zoe-s-bar-restaurant'
+,'the-next-level-sports-training-inc'
+,'piero-s-corner-herndon-5'
+,'ware-house-518'
+,'zandra-s-danzing-fitness-and-health'
+,'saga-bar-and-grill'
+,'bardo-brewpub'
+,'chutney-s-1'
+,'expedition-america-1'
+,'natural-nails'
+,'sprig'
+,'ormella-s'
+,'cedar-springs-health-racquet-sportsclub'
+,'pbx-pilates-barre-extreme'
+,'scratch-kitchen-cupcake-bake-shop'
+,'xtreme-bootcamp-3'
+,'yazoo-brewing-company'
+,'hollywood-beach-bubble'
+,'phat-heads-barbershop'
+,'cell-tech'
+,'heads-turn-salon'
+,'soho-studios'
+,'canadian-river-vineyards-and-winery'
+,'naples-ristorante-pizzeria'
+,'great-tans-2'
+,'smithco-estate-cleaning'
+,'livingston-avenue-car-wash'
+,'the-barrel-live-public-house'
+,'troon-vineyard'
+,'campbell-bros-confusion-hill'
+,'peel-cosmedical-spa-3'
+,'big-tony-s'
+,'rip-tide-mma-1'
+,'taco-burger-cafe-1'
+,'page-one-restaurant'
+,'battello'
+,'varners-restaurant-tavern'
+,'franklin-segway-tours-and-rentals-1'
+,'trapped-okc'
+,'fit-republic'
+,'akai-ryu-shabu-sushi'
+,'capelli-salon-1'
+,'finn-mccool-s-fish-house-and-tavern'
+,'nailed-by-rose-at-glo-salon'
+,'chubby-s-american-grill'
+,'etete'
+,'mumbai-grill-2'
+,'nuvo-at-greenup'
+,'kathleen-coburn'
+,'happy-choice-nails-and-spa-1'
+,'pro-performance-training-center'
+,'group-van-go'
+,'stone-mountain-park'
+,'petra-house'
+,'kublai-khan-restaurant-katy'
+,'illetschko-s-meats-and-smokehouse'
+,'essence-thai-spa'
+,'equinox-hair-and-nails-salon'
+,'a-t-tramp'
+,'milano-pizza-and-mediterranean'
+,'yogasport'
+,'old-chicago-little-rock'
+,'al-carbon'
+,'five-diamond-auto-spa'
+,'a-day-away-massage-and-spa'
+,'salon-harmony-west'
+,'the-good-life-chiropractic'
+,'body-mechanix-9'
+,'icombat-minnesota'
+)
+)
+group by 1,2,3,4,5,6
+) with data primary index(deal_key, deal_permalink, deal_supply_channel);
+
+
+/*Create table with users that are part of the experiment along with the test deals that they have visited*/
+/*Only keep the records with deals that were available after the test launched 8/10/2014 by inner joining to sandbox.eg_test_deals_viewed*/
+/*Attribute any orders to a test deal by a person purchased after viewing the test deal by the last Left Join*/
+
+delete from sandbox.eg_hcv_deals_viewed where event_date > date - 9
+
+insert into sandbox.eg_hcv_deals_viewed (experiment, event_date, variant, cookie_b, deal_key, deal_permalink, division, deal_supply_channel, category, GoodsCategory, order_id,booking_amount,revenue,units)
+select eu.experiment, fc.event_date, variant, fc.cookie_b, fc.deal_key, tdv.deal_permalink, tdv.division, tdv.deal_supply_channel, tdv.category, tdv.GoodsCategory, order_id
+ ,coalesce(booking_amount,0) as "booking_amount", coalesce(revenue,0) as "revenue", coalesce(o.units,0) as "units"
+	FROM sandbox.eg_bld_experiments eu
+	INNER JOIN sandbox.eg_bld_fc fc on eu.user_browser_id = fc.cookie_b and eu.log_date = fc.event_date
+	INNER JOIN sandbox.eg_test_deals_viewed tdv on tdv.deal_key = fc.deal_key 
+	LEFT JOIN 	(select cookie_b, cast(order_time at time zone 'America Central' as date) as "order_date", deal_key, order_id, sum(gross_bookings) as "booking_amount", sum(gross_revenue) as "revenue", sum(original_quantity) as "units"
+		from sandbox.eg_bcookie_orders_collections
+		group by 1,2,3,4
+	) o on o.order_date = fc.event_date and o.cookie_b = fc.cookie_b and o.deal_key = fc.deal_key
+WHERE event_time >= log_timestamp
+AND event_date > date - 9
+GROUP by 1,2,3,4,5,6,7,8,9,10,11,12,13,14;
+
+
+
+drop table sandbox.eg_d
+
+create table sandbox.eg_d as ( 
+ select experiment, event_date, cookie_b, variant, deal_permalink, deal_key, deal_supply_channel as "channel", division as "market", category, GoodsCategory
+ , count(distinct cookie_b) as "users" , count(distinct order_id) as "orders", sum(booking_amount) as "booking_amount", sum(revenue) as "revenue", sum(units) as "units"
+ from sandbox.eg_hcv_deals_viewed
+ group by 1,2,3,4,5,6,7,8,9,10
+) with data primary index(experiment, cookie_b, event_date, variant, deal_permalink, deal_key, channel); 
+
+
+/*Since the user (cookie_b) is the level at which we observe the unit, then it is the leve at which the units, orders, etc must be squared to compute variance*/
+delete from sandbox.eg_metrics_per_user where event_date > date - 9
+
+insert into sandbox.eg_metrics_per_user (experiment,event_date,cookie_b,variant,deal_permalink,deal_key,channel,market,category,GoodsCategory,users,orders,booking_amount,revenue,units,usersusers,ordersorders,booking_amountbooking_amount,revenuerevenue)
+select 
+experiment, event_date, cookie_b, variant, deal_permalink, deal_key, channel, market, category, GoodsCategory, users , orders, booking_amount, revenue, units
+ ,sum(users*users) as "usersusers", sum(orders*orders) as "ordersorders", sum(booking_amount*booking_amount) as "booking_amountbooking_amount", sum(revenue*revenue) as "revenuerevenue"
+from sandbox.eg_d d
+WHERE event_date > date - 9
+group by experiment, event_date, cookie_b, variant, deal_permalink, deal_key, channel, market, category, GoodsCategory, users , orders, booking_amount, revenue, units;
+
+
+/*Aggregate the results at the deal level*/
+delete from sandbox.eg_g where event_date > date - 9
+
+insert into sandbox.eg_g ( experiment,event_date,variant,deal_permalink,deal_key,channel,market,category,GoodsCategory,users,orders,booking_amount,revenue,units,usersusers,ordersorders,booking_amountbooking_amount,revenuerevenue)
+ SELECT
+experiment, event_date, variant, deal_permalink, deal_key, channel, market, category, GoodsCategory
+, sum(users) as "users" , sum(orders) as "orders", sum(booking_amount) as "booking_amount", sum(revenue) as "revenue", sum(units) as "units"
+ ,sum(usersusers) as "usersusers", sum(ordersorders) as "ordersorders", sum(booking_amountbooking_amount) as "booking_amountbooking_amount", sum(revenuerevenue) as "revenuerevenue"
+FROM sandbox.eg_metrics_per_user
+WHERE event_date > date - 9
+GROUP by experiment, event_date, variant, deal_permalink, deal_key, channel, market, category, GoodsCategory;
+
+/*Create final tebleau table*/
+delete from sandbox.eg_hcv_tableau where event_date > date - 9
+
+insert into sandbox.eg_hcv_tableau (experiment,event_date,variant,variant2,deal_permalink,deal_key,channel,market,category,GoodsCategory
+,users,orders,booking_amount,revenue,units,usersusers,ordersorders,booking_amountbooking_amount,revenuerevenue
+,users2,orders2,booking_amount2,revenue2,units2,usersusers2,ordersorders2,booking_amountbooking_amount2,revenuerevenue2
+,WAPPbookings,WAPPunits)
+SELECT
+h.experiment, h.event_date, h.variant, s.variant as variant2, h.deal_permalink, h.deal_key, h.channel, h.market, h.category, h.GoodsCategory
+ , sum(h.users) as "users", sum(h.orders) as "orders", sum(h.booking_amount) as "booking_amount", sum(h.revenue) as "revenue"
+, sum(h.units) as "units", sum(h.usersusers) as "usersusers", sum(h.ordersorders) as "ordersorders", sum(h.booking_amountbooking_amount) as "booking_amountbooking_amount", sum(h.revenuerevenue) as "revenuerevenue"
+ 
+ , sum(s.users) as "users2", sum(s.orders) as "orders2", sum(s.booking_amount) as "booking_amount2", sum(s.revenue) as "revenue2", sum(s.units) as "units2" 
+ , sum(s.usersusers) as "usersusers2", sum(s.ordersorders) as "ordersorders2", sum(s.booking_amountbooking_amount) as "booking_amountbooking_amount2", sum(s.revenuerevenue) as "revenuerevenue2"
+ 
+  ,sum(sum(h.booking_amount) + sum(s.booking_amount)) OVER (PARTITION by h.deal_key) as WAPPbookings
+ ,sum(sum(h.units) + sum(s.units)) OVER (PARTITION by h.deal_key) as WAPPunits
+ 
+ FROM sandbox.eg_g h
+ INNER JOIN  sandbox.eg_g s on s.event_date = h.event_date AND s.experiment = h.experiment AND s.deal_key = h.deal_key AND s.variant < h.variant
+ WHERE h.event_date > date - 9
+ GROUP by 1,2,3,4,5,6,7,8,9,10;
