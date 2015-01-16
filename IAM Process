@@ -1,0 +1,32 @@
+ -- Temporary Repositories
+ --sandbox.edit_uploaded_images_temp
+ 
+delete from sandbox.edit_images_used_temp;
+ 
+ /*Images Used*/
+drop table sandbox.edit_images_used; 
+
+create table sandbox.edit_images_used as (
+SELECT distinct
+image_key
+, cast(DistributionDate as date format 'MM/DD/YYYY') date_used
+, distribution_region_codes as country
+, source
+, ad.deal_supply_channel channel
+, ado.deal_permalink
+,txnmy_v3_cat_name as "category"
+FROM sandbox.edit_images_used_temp i
+LEFT JOIN user_groupondw.agg_deal_option_day_na ado on ado.deal_uuid = i.deal_id
+LEFT JOIN user_groupondw.agg_deal ad on ad.deal_permalink = ado.deal_permalink
+) with data primary index(image_key, date_used, country, source, channel, deal_permalink, category)
+;
+
+--Create a super repository of all images used.
+insert into sandbox.eg_images_used_raw select * from sandbox.edit_images_used;
+
+--Since there will be duplicates in the table above we need to deduplicate it
+drop table sandbox.eg_images_used;
+create table sandbox.eg_images_used as (
+SELECT distinct image_key, date_used, country, source, channel, deal_permalink, category FROM sandbox.eg_images_used_raw
+) with data primary index(image_key, date_used, country, source, channel, deal_permalink, category)
+;
