@@ -1,4 +1,6 @@
- -- Temporary Repositories
+/*USED IMAGES*/
+ 
+-- Temporary Repositories
  --sandbox.edit_uploaded_images_temp
  
 delete from sandbox.edit_images_used_temp;
@@ -29,4 +31,37 @@ drop table sandbox.eg_images_used;
 create table sandbox.eg_images_used as (
 SELECT distinct image_key, date_used, country, source, channel, deal_permalink, category FROM sandbox.eg_images_used_raw
 ) with data primary index(image_key, date_used, country, source, channel, deal_permalink, category)
+;
+
+
+/*UPLOADED IMAGES*/
+ 
+delete from sandbox.edit_uploaded_images_temp;
+ 
+ /*Images Used*/
+drop table sandbox.edit_uploaded_images; 
+
+create table sandbox.edit_uploaded_images as (
+SELECT distinct
+image_key
+, cast(UploadDate as date format 'MM/DD/YYYY') date_uploaded
+, uploaded_by
+, source
+, keyword_list
+, status
+, is_original_image
+, merchant_uuid
+FROM sandbox.edit_uploaded_images_temp j
+) with data primary index(image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid)
+;
+
+
+--Create a super repository of all images used.
+insert into sandbox.eg_uploaded_images_raw select * from sandbox.edit_uploaded_images;
+
+--Since there will be duplicates in the table above we need to deduplicate it
+drop table sandbox.eg_uploaded_images;
+create table sandbox.eg_uploaded_images as (
+SELECT distinct image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid FROM sandbox.eg_uploaded_images_raw
+) with data primary index(image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid)
 ;
