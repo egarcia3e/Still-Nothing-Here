@@ -36,8 +36,8 @@ insert into sandbox.eg_images_used_raw select * from sandbox.edit_images_used;
 --Since there will be duplicates in the table above we need to deduplicate it
 drop table sandbox.eg_images_used;
 create table sandbox.eg_images_used as (
-SELECT distinct image_key, date_used, available_until, active_flag, country, source, channel, deal_permalink, merchant_name, category FROM sandbox.eg_images_used_raw
-) with data primary index(image_key, date_used, available_until, active_flag, country, source, channel, deal_permalink, merchant_name, category)
+SELECT image_key, available_until, max(active_flag) active_flag, country, source, channel, deal_permalink, merchant_name, category FROM sandbox.eg_images_used_raw group by 1,2,4,5,6,7,8,9
+) with data primary index(image_key, available_until, country, source, channel, deal_permalink, merchant_name, category)
 ;
 
 
