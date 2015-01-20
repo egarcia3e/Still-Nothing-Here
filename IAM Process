@@ -25,10 +25,10 @@ i.image_key
 FROM sandbox.edit_images_used_temp i
 LEFT JOIN user_groupondw.agg_deal_option_day_na ado on ado.deal_uuid = i.deal_id
 LEFT JOIN (select distinct deal_key, deal_permalink, merchant_key, deal_supply_channel, txnmy_v3_cat_name from user_groupondw.agg_deal) ad on ad.deal_permalink = ado.deal_permalink
-LEFT JOIN (select deal_key, max(available_until) available_until, active_flag from user_groupondw.dim_deal_option_status_history group by 1) h on h.deal_key = ad.deal_key
+LEFT JOIN (select deal_key, active_flag, max(available_until) available_until from user_groupondw.dim_deal_option_status_history group by 1,2) h on h.deal_key = ad.deal_key
 LEFT JOIN (select distinct merchant_key, merchant_name from user_groupondw.dim_deal) dd on dd.merchant_key = ad.merchant_key
 WHERE country in ('US', 'CA')
-) with data primary index(image_key, date_used, country, source, channel, deal_permalink, category)
+) with data primary index(image_key, date_used, available_until, active_flag, country, source, channel, deal_permalink, category)
 ;
 
 --Create a super repository of all images used.
