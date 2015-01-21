@@ -70,6 +70,6 @@ insert into sandbox.eg_uploaded_images_raw select * from sandbox.edit_uploaded_i
 --Since there will be duplicates in the table above we need to deduplicate it
 drop table sandbox.eg_uploaded_images;
 create table sandbox.eg_uploaded_images as (
-SELECT distinct image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid FROM sandbox.eg_uploaded_images_raw
+SELECT distinct image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid FROM sandbox.eg_uploaded_images_raw WHERE image_key not like any ('%banner%', '%badge%', '%corporate%')
 ) with data primary index(image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid)
 ;
