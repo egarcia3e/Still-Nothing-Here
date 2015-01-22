@@ -37,7 +37,9 @@ insert into sandbox.eg_images_used_raw select * from sandbox.edit_images_used;
 --Since there will be duplicates in the table above we need to deduplicate it
 drop table sandbox.eg_images_used;
 create table sandbox.eg_images_used as (
-SELECT distinct image_key, available_at, available_until, country, source, channel, deal_permalink, merchant_name, category FROM sandbox.eg_images_used_raw
+SELECT distinct image_key, available_at, available_until, country
+, CASE WHEN source NOT IN ('In-House Stock', 'Merchant Provided') THEN 'Stock' ELSE source END source
+, channel, deal_permalink, merchant_name, category FROM sandbox.eg_images_used_raw
 ) with data primary index(image_key, available_at, available_until, country, source, channel, deal_permalink, merchant_name, category)
 ;
 
@@ -70,6 +72,8 @@ insert into sandbox.eg_uploaded_images_raw select * from sandbox.edit_uploaded_i
 --Since there will be duplicates in the table above we need to deduplicate it
 drop table sandbox.eg_uploaded_images;
 create table sandbox.eg_uploaded_images as (
-SELECT distinct image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid FROM sandbox.eg_uploaded_images_raw WHERE image_key not like any ('%banner%', '%badge%', '%corporate%') AND status = 'successful'
+SELECT distinct image_key, date_uploaded, uploaded_by
+, CASE WHEN source = 'In-House Stock' THEN 'In-House Stock' WHEN source = 'Merchant Provided' THEN 'Merchant Provided' ELSE 'Stock' END source
+, keyword_list, status, is_original_image, merchant_uuid FROM sandbox.eg_uploaded_images_raw WHERE image_key not like any ('%banner%', '%badge%', '%corporate%') AND status = 'successful'
 ) with data primary index(image_key, date_uploaded, uploaded_by, source, keyword_list, status, is_original_image, merchant_uuid)
 ;
