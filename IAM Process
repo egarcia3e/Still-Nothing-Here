@@ -37,9 +37,11 @@ insert into sandbox.eg_images_used_raw select * from sandbox.edit_images_used;
 --Since there will be duplicates in the table above we need to deduplicate it
 drop table sandbox.eg_images_used;
 create table sandbox.eg_images_used as (
-SELECT distinct image_key, available_at, available_until, country
-, CASE WHEN source NOT IN ('In-House Stock', 'Merchant Provided') THEN 'Stock' ELSE source END source
-, channel, deal_permalink, merchant_name, category FROM sandbox.eg_images_used_raw
+SELECT distinct r.image_key, r.available_at, r.available_until, r.country
+, CASE WHEN r.source NOT IN ('In-House Stock', 'Merchant Provided') THEN 'Stock' ELSE source END source
+, r.channel, r.deal_permalink, r.merchant_name, r.category
+FROM sandbox.eg_images_used_raw r
+INNER JOIN (select distinct permalink from sandbox.edit_webr) w on w.permalink = r.deal_permalink
 ) with data primary index(image_key, available_at, available_until, country, source, channel, deal_permalink, merchant_name, category)
 ;
 
